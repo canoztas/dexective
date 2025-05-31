@@ -36,7 +36,7 @@ Before you begin, ensure you have the following installed and configured:
 
 1.  **Clone the repository:**
     ```bash
-    git clone[ [https://github.com/your-username/dexective.git](https://github.com/your-username/dexective.git)](https://github.com/canoztas/dexective/) # Or your actual repo name
+    git clone https://github.com/canoztas/dexective/
     cd dexective
     ```
 

@@ -2,7 +2,7 @@
 
 dexective is a command-line tool for analyzing Android applications (`.apk` files) to identify and localize potentially malicious code. It leverages a powerful deep learning (CNN) model and an ensemble of Explainable AI (XAI) techniques to pinpoint suspicious classes within the app's `classes.dex` file.
 
-The core methodology is based on the research paper: *[Your Paper Title Here]*.
+The core methodology is based on the research paper: *NOT YET READY*.
 
 The tool works by:
 1.  Converting an app's `classes.dex` file into a grayscale image.

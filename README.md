@@ -7,6 +7,9 @@
 
 It transforms the app’s `classes.dex` into a grayscale image, classifies it with a CNN, and—if malicious—applies an ensemble of Explainable AI (XAI) techniques to pinpoint the exact Smali classes responsible.
 
+
+[![Demo Video](images/heatmap.png)](https://www.youtube.com/watch?v=13ysN18IwLA)
+
 ---
 
 ## 📷 Workflow Overview

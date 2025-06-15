@@ -1,0 +1,7 @@
+numpy
+opencv-python
+tensorflow
+tf-keras-vis
+matplotlib
+scikit-learn
+androguard

@@ -1,125 +1,128 @@
-# Dexective: Visual Malware Localization Tool
+Dexective: Visual Malware Localization & Scanning Tool
 
-**Dexective** is a command-line tool for analyzing Android applications (`.apk` files) to identify—and finely localize—potentially malicious code. It transforms the app’s `classes.dex` into a grayscale image, classifies it with a CNN, and, for malicious samples, applies an ensemble of Explainable AI (XAI) techniques to pinpoint the exact Smali classes responsible.
+Dexective is a command-line tool for analyzing Android applications (.apk files). It operates in two modes: a scan mode for rapid classification and a deep analyze mode to identify and finely localize potentially malicious code.
 
-<details>
-<summary>📷 Workflow Overview</summary>
+It transforms the app’s classes.dex into a grayscale image, classifies it with a CNN, and, for malicious samples in analyze mode, applies an ensemble of Explainable AI (XAI) techniques to pinpoint the exact Smali classes responsible.
 
-1. **DEX → Image**: Convert `classes.dex` bytes into a 2D grayscale image.  
-2. **CNN Classification**: Pre-trained model labels it **Benign** or **Malicious**.  
-3. **XAI Localization**: If malicious, run multiple XAI methods (Grad-CAM++, ScoreCAM, Integrated Gradients, etc.) to generate heatmaps.  
-4. **Heatmap → Smali**: Map hot pixels back to Smali classes via byte‑offset resolution and (optionally) DBSCAN clustering.
+DEX → Image: Convert classes.dex bytes into a 2D grayscale image.
 
-![Detection Heatmap](images/detection_heatmap.png)  
-*Figure: Dexective identifies suspicious regions on the DEX–image.*
+CNN Classification: A pre-trained model labels the image as Benign or Malicious. This is the final step for the scan mode.
 
-![Localization Example](images/localization_example.png)  
-*Figure: Highlighted Smali classes in the code window.*
-</details>
+XAI Localization (Analyze Mode): If malicious, run XAI methods (e.g., Grad-CAM++) to generate heatmaps identifying critical regions.
 
----
+Heatmap → Smali (Analyze Mode): Map the “hot” pixels from the heatmaps back to the specific Smali classes responsible for the malicious prediction.
 
-## 🚀 Features
+Figure: Dexective identifies suspicious regions on the DEX–image.
 
-- **Static-Only**: No need to execute the APK; pure static analysis.  
-- **Deep Learning**: High-accuracy CNN classification on DEX–images.  
-- **Fine-Grained Localization**: Pinpoint exact Smali classes, not just the APK.  
-- **XAI Ensemble**: Combine Grad-CAM++, ScoreCAM, Integrated Gradients, SmoothGrad, and more.  
-- **Flexible Input Modes**:  
-  - `file`: Analyze a local `.apk` file.  
-  - `adb`: Pull & analyze one installed package via ADB.  
-  - `adb-all`: Pull & analyze *all* installed packages on a connected device.  
-- **Per-Family Tuning**: Custom thresholds & methods for known malware families.  
-- **Rich Reports**: Text-based summaries and PNG heatmaps for each XAI method.
+Figure: Highlighted Smali classes in the code window.
 
----
+🚀 Features
 
-## 📋 Prerequisites
+Dual-Mode Operation
 
-- **Python 3.8+**  
-- **Java JRE** (for `baksmali.jar`)  
-- **Android Debug Bridge (ADB)** (for `adb` modes)  
-- **TensorFlow 2.x** and **tf-keras-vis**  
-- **OpenCV** (`opencv-python`)  
-- **scikit-learn**, **matplotlib**, **androguard**  
-- A pre-trained Keras `.h5` model for DEX–image classification.  
-- `baksmali.jar` for Smali decompilation.
+scan: For rapid Benign/Malicious classification of many apps.
 
----
+analyze: For deep, fine-grained localization of malicious classes using XAI.
 
-## 📥 Installation
+Static-Only: No need to execute the APK; pure static analysis.
 
-```bash
-git clone https://github.com/canoztas/dexective.git
+Deep Learning Classification: High-accuracy CNN model for DEX–image analysis.
+
+Modern CLI: User-friendly interface with richly formatted tables, progress bars, and color-coded output powered by Typer and Rich.
+
+Flexible Input Modes: Analyze apps from a local file, a single installed adb package, or adb-all for every third-party app on a device.
+
+XAI-Powered Localization: Uses Grad-CAM++ to pinpoint exact Smali classes, not just the APK.
+
+Rich Reports: Generates text-based summaries and PNG heatmaps for each malicious app analyzed.
+
+📋 Prerequisites
+
+Python 3.8+
+
+Android Debug Bridge (ADB) (for adb and adb-all modes)
+
+Java JRE (only required for the analyze command)
+
+A pre-trained Keras .h5 model for DEX–image classification
+
+baksmali.jar for Smali decompilation (only required for the analyze command)
+
+Key Python libraries (install via pip install -r requirements.txt):
+
+tensorflow
+
+tf-keras-vis
+
+typer & rich
+
+opencv-python
+
+scikit-learn, matplotlib, pyfiglet
+
+androguard (optional, for advanced mapping)
+
+📥 Installation
+
+git clone https://github.com/your-username/dexective.git
 cd dexective
 python -m venv venv
 source venv/bin/activate    # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-```
 
-Place your `model.h5` and `baksmali.jar` in a folder of your choice (or the repo root).
+# Place your model.h5 and baksmali.jar in the repo root or a folder of your choice.
 
----
+💻 Usage
 
-## 💻 Usage
+Dexective is run using two main sub-commands: scan for quick checks and analyze for deep localization.
 
-Run `dexective.py` with one of three modes:
+1️⃣ Quick Scanning (Fast Classification)
 
-### 1️⃣ Local File Mode
-```bash
-python dexective.py file \
+This mode quickly determines if an APK is benign or malicious without performing localization. It does not require baksmali.jar.
+
+Scan a local file:
+
+python dexecutive.py scan file \
   --model path/to/model.h5 \
-  --baksmali path/to/baksmali.jar \
-  --output-dir ./results \
   /path/to/sample.apk
-```
 
-### 2️⃣ Single-APK via ADB
-```bash
-python dexective.py adb \
+Scan all apps on a connected device:
+
+python dexecutive.py scan adb-all \
+  --model path/to/model.h5 \
+  --output-dir ./scan_results
+
+Output is printed directly to the console.
+
+2️⃣ Full Analysis (XAI Localization)
+
+This mode performs localization on malicious samples. It requires the --baksmali argument.
+
+Analyze a local file:
+
+python dexecutive.py analyze file \
   --model path/to/model.h5 \
   --baksmali path/to/baksmali.jar \
-  --output-dir ./results \
-  com.example.app
-```
+  --output-dir ./analysis_results \
+  /path/to/malicious_sample.apk
 
-### 3️⃣ All-APK via ADB-All
-```bash
-python dexective.py adb-all \
+Analyze all apps on a connected device:
+
+python dexexecutive.py analyze adb-all \
   --model path/to/model.h5 \
   --baksmali path/to/baksmali.jar \
-  --output-dir ./results
-```
+  --output-dir ./analysis_results
 
-**Common Options:**
-- `--methods`: Override XAI methods (choices: `gradcam`, `gradcam++`, `scorecam`, `vanilla_saliency`, `smoothgrad`, `integrated_gradients`).  
+📂 Output Structure (Analyze Mode)
 
----
+For each malicious APK found, the analyze command’s output directory contains:
 
-## 📂 Output Structure
+analysis_results/
+├─ adb_pulled_apks/
+│  └─ com.malicious.app.apk
+├─ report_com.malicious.app.txt      # Ranked list of suspicious classes
+└─ com.malicious.app_heatmap.png     # Grad-CAM++ heatmap image
 
-For each malicious APK, `results/` will contain:
+📖 License
 
-- `report_<apk_name>.txt`: Ranked list of suspicious classes + method counts + scores.  
-- `<apk_name>_<method>_heatmap.png`: Heatmaps per XAI method.  
-
-Example:
-```
-results/
-├─ report_sample.txt
-├─ sample_gradcam++_heatmap.png
-├─ sample_scorecam_heatmap.png
-└─ sample_integrated_gradients_heatmap.png
-```
-
----
-
-## ⚙️ Per‑Family Configuration
-
-Located in `dexective.py > FAMILY_PARAMS_CONFIG`. If an APK’s path includes a known family key (e.g. `agent.aax/`), those thresholds & methods apply; otherwise the `default` config is used. CLI `--methods` always overrides.
-
----
-
-## 📖 License
-
-[MIT](LICENSE)
+MIT

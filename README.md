@@ -145,13 +145,13 @@ python dexecutive.py analyze adb-all \
 
 ## 📂 Output Structure (Analyze Mode)
 
-\`\`\`
+```
 analysis_results/
 ├─ adb_pulled_apks/
 │  └─ com.example.app.apk
 ├─ report_com.example.app.txt      # Ranked suspicious classes
 └─ com.example.app_heatmap.png     # Grad-CAM++ heatmap
-\`\`\`
+```
 
 ---
 

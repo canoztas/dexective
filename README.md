@@ -23,11 +23,12 @@ It transforms the app’s `classes.dex` into a grayscale image, classifies it wi
 4. **Heatmap → Smali**  
    Map “hot” pixels back to specific Smali classes for precise localization.  
 
+![Detection Heatmap](images/dex_image.png)  
+*Figure: DEX image by Dexective.*
+
 ![Detection Heatmap](images/detection_heatmap.png)  
 *Figure: Hotspots on the DEX image detected by Dexective.*
 
-![Localization Example](images/localization_example.png)  
-*Figure: Localized Smali classes in code view.*
 
 </details>
 

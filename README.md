@@ -1,13 +1,13 @@
-# Dexective: Visual Malware Localization & Scanning Tool
+# dexective: Visual Malware Localization & Scanning Tool
 
-**Dexective** is a command-line tool for analyzing Android applications (`.apk` files). It operates in two modes:
+**dexective** is a command-line tool for analyzing Android applications (`.apk` files). It operates in two modes:
 
 - **`scan`** mode for rapid classification
 - **`analyze`** mode to identify and finely localize potentially malicious code
 
 It transforms the app’s `classes.dex` into a grayscale image, classifies it with a CNN, and—if malicious—applies an ensemble of Explainable AI (XAI) techniques to pinpoint the exact Smali classes responsible.
 
-
+[![Demo Video](images/heatmap.png)](img/dexective.mp4)
 [![Demo Video](images/heatmap.png)](https://www.youtube.com/watch?v=13ysN18IwLA)
 
 ---

@@ -305,9 +305,9 @@ def scan_single_apk(apk_path: str, model: keras.Model, progress: Optional[Progre
     if mal_score is None:
         console.log(f"Could not process [highlight]{reported_name}[/highlight].", style="error")
     elif mal_score < 0.5:
-        console.log(f"✔️ [success]Benign[/success]: [highlight]{reported_name}[/highlight] (Score: {mal_score:.4f})")
+        console.log(f" [success]Benign[/success]: [highlight]{reported_name}[/highlight] (Score: {mal_score:.4f})")
     else:
-        console.log(f"❌ [error]Malicious[/error]: [highlight]{reported_name}[/highlight] (Score: [bold red]{mal_score:.4f}[/bold red])")
+        console.log(f" [error]Malicious[/error]: [highlight]{reported_name}[/highlight] (Score: [bold red]{mal_score:.4f}[/bold red])")
 
     if progress and task_id is not None:
         progress.update(task_id, advance=1)

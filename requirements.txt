@@ -5,3 +5,8 @@ tf-keras-vis
 matplotlib
 scikit-learn
 androguard
+intervaltree
+typer
+rich
+pyfiglet
+tqdm

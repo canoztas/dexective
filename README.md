@@ -2,12 +2,7 @@
 [![Demo Video](images/dexective.png)](https://www.youtube.com/watch?v=13ysN18IwLA)
 
 
-**dexective** is a command-line tool for analyzing Android applications (`.apk` files). It operates in two modes:
-
-- **`scan`** mode for rapid classification
-- **`analyze`** mode to identify and finely localize potentially malicious code
-
-It transforms the app’s `classes.dex` into a grayscale image, classifies it with a CNN, and—if malicious—applies an ensemble of Explainable AI (XAI) techniques to pinpoint the exact Smali classes responsible.
+**dexective** is a command-line tool for analyzing Android applications (`.apk` files). It transforms DEX files into grayscale images, classifies them with a CNN, and—if malicious—applies multiple Explainable AI (XAI) techniques to pinpoint the exact classes responsible.
 
 ![Dexective Demo](images/dexective.gif)
 
@@ -19,14 +14,20 @@ It transforms the app’s `classes.dex` into a grayscale image, classifies it wi
 <details>
 <summary>Click to expand</summary>
 
-1. **DEX → Image**  
-   Convert `classes.dex` bytes into a 2D grayscale image.
-2. **CNN Classification**  
-   Classify the DEX image as **Benign** or **Malicious**. (End of `scan` mode.)
-3. **XAI Localization**  
-   If malicious, run XAI methods (e.g., Grad-CAM++) to generate heatmaps highlighting suspicious regions.
-4. **Heatmap → Smali**  
-   Map “hot” pixels back to specific Smali classes for precise localization.  
+1. **Multi-DEX Extraction**  
+   Extract all `classes*.dex` files from the APK (classes.dex, classes2.dex, etc.)
+
+2. **DEX → Image**  
+   Convert each DEX file's bytes into a 2D grayscale image using deterministic mapping.
+
+3. **CNN Classification**  
+   Classify the DEX image as **Benign** or **Malicious**.
+
+4. **XAI Localization**  
+   If malicious, run multiple XAI methods (Grad-CAM++, Score-CAM, Saliency, SmoothGrad, Integrated Gradients) to generate heatmaps highlighting suspicious regions.
+
+5. **Pixel → Byte → Class Mapping**  
+   Map "hot" pixels back to byte offsets, then to specific Java classes using Androguard.
 
 ![Detection Heatmap](images/dex_image.png)  
 *Figure: DEX image by Dexective.*
@@ -34,32 +35,32 @@ It transforms the app’s `classes.dex` into a grayscale image, classifies it wi
 ![Detection Heatmap](images/detection_heatmap.png)  
 *Figure: Hotspots on the DEX image detected by Dexective.*
 
-
 </details>
 
 ---
 
 ## 🚀 Features
 
-- **Dual-Mode Operation**:
-  - `scan` for bulk, fast classification
-  - `analyze` for deep localization with XAI
-- **Static-Only Analysis**: No APK execution required
-- **High-Accuracy CNN**: State-of-the-art DEX–image classifier
-- **Rich CLI**: Tables, progress bars, and colorized output via Typer & Rich
-- **Flexible Inputs**: Local files, single `adb` package, or `adb-all`
-- **XAI-Powered Localization**: Grad-CAM++ pinpointing of malicious Smali classes
-- **Detailed Reports**: Text summaries + PNG heatmaps
+- **Multi-DEX Support**: Automatically handles APKs with multiple DEX files
+- **Multiple XAI Methods**: 
+  - Grad-CAM++
+  - Score-CAM
+  - Vanilla Saliency
+  - SmoothGrad
+  - Integrated Gradients
+- **Ensemble Methods**: Combine multiple XAI heatmaps (max, mean)
+- **Androguard-Based Mapping**: Precise pixel-to-class mapping using byte offset intervals
+- **ADB Device Scanning**: Scan all apps on a connected Android device
+- **JSON Output**: Structured JSON reports with full analysis results
+- **Rich CLI**: Beautiful progress bars and colorized output
 
 ---
 
 ## 📋 Prerequisites
 
-- **Python 3.8+**
-- **ADB** (for `adb` / `adb-all` modes)
-- **Java JRE** (required by `analyze`)
+- **Python 3.10+**
+- **ADB** (for `adb-scan` command) - must be on PATH
 - **Keras `.h5` model** for classification
-- **`baksmali.jar`** for Smali decompilation (required by `analyze`)
 
 Install dependencies:
 
@@ -69,89 +70,203 @@ pip install -r requirements.txt
 
 Key libraries:
 - `tensorflow`, `tf-keras-vis`
-- `typer`, `rich`
-- `opencv-python`, `matplotlib`
-- `scikit-learn`, `pyfiglet`
-- `androguard` (optional)
+- `typer`, `rich`, `pyfiglet`
+- `opencv-python`, `numpy`
+- `androguard`, `intervaltree`
+- `tqdm`
 
 ---
 
 ## 📥 Installation
 
 ```bash
-git clone https://github.com/your-username/dexective.git
+git clone https://github.com/canoztas/dexective.git
 cd dexective
 python -m venv venv
 source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Place `model.h5` and `baksmali.jar` in the repo root (or point to them via CLI args).
-
 ---
 
 ## 💻 Usage
 
-Dexective offers two sub-commands: `scan` and `analyze`.
-
-### 1. Quick Scan (Fast Classification)
-
-Does **not** require `baksmali.jar`.
-
-**Scan a single APK:**
+### Analyze a Single APK
 
 ```bash
-python dexecutive.py scan file \
+dexective analyze --apk samples/malware.apk \
   --model /path/to/model.h5 \
-  /path/to/sample.apk
+  --xai gradcampp,scorecam,saliency,smoothgrad,ig \
+  --xai-ensemble max \
+  --top-k 100 \
+  --json \
+  --heatmap \
+  --output out/
 ```
 
-**Scan all third‑party apps on a device:**
+**Options:**
+- `--apk`: Path to APK file (required)
+- `--model`: Path to Keras model file (required)
+- `--output`: Output directory (default: `out`)
+- `--xai`: Comma-separated XAI methods: `gradcampp`, `scorecam`, `saliency`, `smoothgrad`, `ig` (default: `gradcampp`)
+- `--xai-ensemble`: Ensemble method: `max` or `none` (default: `max`)
+- `--last-conv-layer`: Override automatic last conv layer detection
+- `--threshold`: Malware threshold (default: 0.5)
+- `--top-k`: Number of top classes to include in JSON (default: 100)
+- `--heatmap`: Save heatmap PNG files
+- `--json`: Save JSON report (default: enabled)
+- `--verbose`: Verbose output
+
+### Scan All Apps on Android Device
 
 ```bash
-python dexexecutive.py scan adb-all \
+dexective adb-scan \
   --model /path/to/model.h5 \
-  --output-dir ./scan_results
+  --output device_scan/ \
+  --limit 30 \
+  --xai gradcampp,saliency \
+  --xai-ensemble max \
+  --heatmap
 ```
 
-_Output is printed to the console._
+**Options:**
+- `--model`: Path to Keras model file (required)
+- `--output`: Output directory (default: `out`)
+- `--include-system`: Include system packages (default: third-party only)
+- `--limit`: Limit number of apps to scan
+- `--xai`: Comma-separated XAI methods
+- `--xai-ensemble`: Ensemble method
+- `--threshold`: Malware threshold (default: 0.5)
+- `--top-k`: Number of top classes (default: 100)
+- `--heatmap`: Save heatmap PNG files
+- `--workers`: Number of parallel workers (default: 1)
+- `--verbose`: Verbose output
 
 ---
 
-### 2. Full Analysis (XAI Localization)
+## 📂 Output Structure
 
-**Requires** `--baksmali baksmali.jar`.
+### Single APK Analysis
 
-**Analyze one APK:**
-
-```bash
-python dexecutive.py analyze file \
-  --model /path/to/model.h5 \
-  --baksmali /path/to/baksmali.jar \
-  --output-dir ./analysis_results \
-  /path/to/malicious.apk
+```
+out/
+├─ <apk_sha256>.json              # Full analysis report
+├─ <apk_sha256>_ensemble.png      # Ensemble heatmap (if --heatmap)
+└─ heatmaps/                      # Per-method heatmaps (if enabled)
+   └─ <apk_sha256>/
+      ├─ gradcampp.png
+      ├─ scorecam.png
+      └─ ...
 ```
 
-**Analyze all installed apps:**
+### ADB Scan
 
-```bash
-python dexecutive.py analyze adb-all \
-  --model /path/to/model.h5 \
-  --baksmali /path/to/baksmali.jar \
-  --output-dir ./analysis_results
+```
+device_scan/
+├─ adb_pulled_apks/               # Pulled APK files
+│  ├─ com.example.app.apk
+│  └─ ...
+├─ adb_scan_summary.json          # Summary of all scanned apps
+├─ <sha2561>.json                 # Individual app reports
+├─ <sha2562>.json
+└─ ...
 ```
 
 ---
 
-## 📂 Output Structure (Analyze Mode)
+## 📄 JSON Output Schema
 
+```json
+{
+  "tool": {
+    "name": "dexective",
+    "version": "1.0.0"
+  },
+  "model": {
+    "path": "/path/to/model.h5",
+    "hash": "<sha256>",
+    "input_shape": [224, 224, 1]
+  },
+  "apk": {
+    "path": "/path/to/app.apk",
+    "sha256": "<sha256>",
+    "package": "com.example.app",
+    "analyzed_dex": ["classes.dex", "classes2.dex"]
+  },
+  "xai": {
+    "methods": ["gradcampp", "scorecam", "saliency"],
+    "ensemble": "max",
+    "last_conv_layer": "conv2d_5"
+  },
+  "prediction": {
+    "is_malicious": true,
+    "score": 0.87
+  },
+  "classes": [
+    {
+      "class": "Lcom/example/MaliciousClass;",
+      "score": 0.93,
+      "dex": "classes2.dex"
+    },
+    {
+      "class": "Lcom/example/SuspiciousClass;",
+      "score": 0.88,
+      "dex": "classes.dex"
+    }
+  ],
+  "top_k": 100,
+  "generated": "2024-01-15T10:30:00Z",
+  "provenance": {
+    "seed": null,
+    "image_side": 1024,
+    "pad": true
+  }
+}
 ```
-analysis_results/
-├─ adb_pulled_apks/
-│  └─ com.example.app.apk
-├─ report_com.example.app.txt      # Ranked suspicious classes
-└─ com.example.app_heatmap.png     # Grad-CAM++ heatmap
-```
+
+---
+
+## 🔧 XAI Methods
+
+- **Grad-CAM++**: Gradient-weighted Class Activation Mapping with improved localization
+- **Score-CAM**: Score-weighted Class Activation Mapping using forward passes
+- **Vanilla Saliency**: Gradient of target class w.r.t. input
+- **SmoothGrad**: Averaged saliency over noisy samples (default: 25 samples, σ=0.1)
+- **Integrated Gradients**: Path-integrated gradients from baseline to input (default: 50 steps)
+
+All heatmaps are normalized to [0, 1] range. The ensemble method takes the pixel-wise maximum (or mean) across selected methods.
+
+---
+
+## 🗺️ Class Mapping
+
+Dexective uses Androguard to build interval trees mapping byte offsets to class names:
+
+1. For each DEX file, extract class data and method code item byte ranges
+2. Build an interval tree for fast offset-to-class lookup
+3. For each "hot" pixel in the heatmap:
+   - Map pixel (r, c) → byte offset
+   - Query interval tree → class name
+4. Aggregate scores across DEX files using maximum per class
+
+If Androguard is unavailable, a fallback implementation is used (with reduced accuracy).
+
+---
+
+## ⚙️ Configuration
+
+### Model Requirements
+
+- Input: Grayscale image (will be resized to model's expected input shape)
+- Output: Single sigmoid output (malware probability)
+- Architecture: Must contain at least one convolutional layer for XAI methods
+
+### Performance Tips
+
+- Use `--limit` when scanning many apps
+- Score-CAM can be slow with many feature maps; it automatically samples up to 128 maps
+- SmoothGrad uses 25 samples by default; reduce for faster processing
+- Integrated Gradients uses 50 steps by default
 
 ---
 

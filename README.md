@@ -61,6 +61,7 @@
 - **Python 3.10+**
 - **ADB** (for `adb-scan` command) - must be on PATH
 - **Keras `.h5` model** for classification
+- **Java + baksmali.jar** (optional, only required for `--emit-smali`)
 
 Install dependencies:
 
@@ -74,6 +75,8 @@ Key libraries:
 - `opencv-python`, `numpy`
 - `androguard`, `intervaltree`
 - `tqdm`
+
+**Note**: Baksmali is **optional** and only needed if you want to decompile classes to Smali format. The default class mapping uses Androguard and works without Java/baksmali.
 
 ---
 
@@ -94,6 +97,7 @@ pip install -r requirements.txt
 ### Analyze a Single APK
 
 ```bash
+# Basic analysis (no baksmali required)
 dexective analyze --apk samples/malware.apk \
   --model /path/to/model.h5 \
   --xai gradcampp,scorecam,saliency,smoothgrad,ig \
@@ -101,6 +105,16 @@ dexective analyze --apk samples/malware.apk \
   --top-k 100 \
   --json \
   --heatmap \
+  --output out/
+
+# With Smali decompilation (requires baksmali)
+dexective analyze --apk samples/malware.apk \
+  --model /path/to/model.h5 \
+  --xai gradcampp,saliency \
+  --xai-ensemble max \
+  --top-k 50 \
+  --emit-smali \
+  --baksmali /path/to/baksmali.jar \
   --output out/
 ```
 
@@ -115,11 +129,14 @@ dexective analyze --apk samples/malware.apk \
 - `--top-k`: Number of top classes to include in JSON (default: 100)
 - `--heatmap`: Save heatmap PNG files
 - `--json`: Save JSON report (default: enabled)
+- `--emit-smali`: Decompile top classes to Smali format (requires `--baksmali`)
+- `--baksmali`: Path to baksmali.jar (required for `--emit-smali`)
 - `--verbose`: Verbose output
 
 ### Scan All Apps on Android Device
 
 ```bash
+# Basic scan (no baksmali required)
 dexective adb-scan \
   --model /path/to/model.h5 \
   --output device_scan/ \
@@ -127,6 +144,16 @@ dexective adb-scan \
   --xai gradcampp,saliency \
   --xai-ensemble max \
   --heatmap
+
+# With Smali decompilation
+dexective adb-scan \
+  --model /path/to/model.h5 \
+  --output device_scan/ \
+  --limit 20 \
+  --xai scorecam \
+  --xai-ensemble max \
+  --emit-smali \
+  --baksmali /path/to/baksmali.jar
 ```
 
 **Options:**
@@ -139,6 +166,8 @@ dexective adb-scan \
 - `--threshold`: Malware threshold (default: 0.5)
 - `--top-k`: Number of top classes (default: 100)
 - `--heatmap`: Save heatmap PNG files
+- `--emit-smali`: Decompile top classes to Smali format (requires `--baksmali`)
+- `--baksmali`: Path to baksmali.jar (required for `--emit-smali`)
 - `--workers`: Number of parallel workers (default: 1)
 - `--verbose`: Verbose output
 
@@ -152,7 +181,11 @@ dexective adb-scan \
 out/
 ├─ <apk_sha256>.json              # Full analysis report
 ├─ <apk_sha256>_ensemble.png      # Ensemble heatmap (if --heatmap)
-└─ heatmaps/                      # Per-method heatmaps (if enabled)
+├─ <apk_sha256>/                   # Directory (if --emit-smali)
+│  └─ smali/                       # Decompiled Smali files
+│     └─ com/example/
+│        └─ MaliciousClass.smali
+└─ heatmaps/                       # Per-method heatmaps (if enabled)
    └─ <apk_sha256>/
       ├─ gradcampp.png
       ├─ scorecam.png
@@ -203,11 +236,12 @@ device_scan/
     "score": 0.87
   },
   "classes": [
-    {
-      "class": "Lcom/example/MaliciousClass;",
-      "score": 0.93,
-      "dex": "classes2.dex"
-    },
+      {
+        "class": "Lcom/example/MaliciousClass;",
+        "score": 0.93,
+        "dex": "classes2.dex",
+        "smali": "<apk_sha>/smali/com/example/MaliciousClass.smali"
+      },
     {
       "class": "Lcom/example/SuspiciousClass;",
       "score": 0.88,
@@ -240,7 +274,7 @@ All heatmaps are normalized to [0, 1] range. The ensemble method takes the pixel
 
 ## 🗺️ Class Mapping
 
-Dexective uses Androguard to build interval trees mapping byte offsets to class names:
+Dexective uses **Androguard** (default) to build interval trees mapping byte offsets to class names:
 
 1. For each DEX file, extract class data and method code item byte ranges
 2. Build an interval tree for fast offset-to-class lookup
@@ -248,6 +282,8 @@ Dexective uses Androguard to build interval trees mapping byte offsets to class 
    - Map pixel (r, c) → byte offset
    - Query interval tree → class name
 4. Aggregate scores across DEX files using maximum per class
+
+**Baksmali is optional** and only used when `--emit-smali` is specified. When enabled, it decompiles only the top-K classes to Smali format for human-readable inspection. The default class mapping works entirely with Androguard and requires no Java/baksmali dependency.
 
 If Androguard is unavailable, a fallback implementation is used (with reduced accuracy).
 

@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from models.loader import load_keras_model, find_last_conv_layer, get_model_input_shape
 from dex.apk_reader import extract_dex_files, get_apk_package_name
 from dex.mapping import PixelMap, ClassMapper, compute_class_scores
+from dex.baksmali import decompile_top_classes, check_baksmali_available
 from utils.images import bytes_to_image, prepare_model_input
 from utils.hashing import sha256_file, sha256_bytes
 from utils.io import ensure_dir, get_temp_dir, cleanup_temp_dir, safe_filename
@@ -67,7 +68,9 @@ def analyze_apk(
     top_k: int,
     output_dir: str,
     save_heatmap: bool,
-    save_per_method: bool = False
+    save_per_method: bool = False,
+    emit_smali: bool = False,
+    baksmali_jar: Optional[str] = None
 ) -> Optional[dict]:
     """
     Analyze a single APK with multi-DEX support.
@@ -194,6 +197,49 @@ def analyze_apk(
             for class_name, info in all_class_scores.items()
         ]
         
+        # Sort by score descending and take top-K
+        class_score_list.sort(key=lambda x: x["score"], reverse=True)
+        class_score_list = class_score_list[:top_k]
+        
+        # Decompile top classes with baksmali if requested
+        class_to_smali = {}
+        if emit_smali and baksmali_jar:
+            if not check_baksmali_available(baksmali_jar):
+                console.log("Baksmali is not available. Please ensure Java is installed and baksmali.jar exists.", style="error")
+            else:
+                console.log(f"Decompiling top {len(class_score_list)} classes with baksmali...")
+                smali_output_dir = os.path.join(output_dir, apk_sha256, "smali")
+                ensure_dir(smali_output_dir)
+                
+                # Group classes by DEX file
+                dex_to_classes = {}
+                for cls_info in class_score_list:
+                    dex_name = cls_info["dex"]
+                    if dex_name not in dex_to_classes:
+                        dex_to_classes[dex_name] = []
+                    dex_to_classes[dex_name].append(cls_info["class"])
+                
+                # Decompile classes from each DEX
+                for dex_filename, dex_path in dex_files:
+                    if dex_filename in dex_to_classes:
+                        classes_to_decompile = dex_to_classes[dex_filename]
+                        smali_map = decompile_top_classes(
+                            dex_path,
+                            classes_to_decompile,
+                            smali_output_dir,
+                            baksmali_jar
+                        )
+                        class_to_smali.update(smali_map)
+                
+                # Add smali paths to class_score_list
+                for cls_info in class_score_list:
+                    class_desc = cls_info["class"]
+                    if class_desc in class_to_smali:
+                        # Make path relative to output_dir
+                        smali_path = class_to_smali[class_desc]
+                        rel_path = os.path.relpath(smali_path, output_dir)
+                        cls_info["smali"] = rel_path
+        
         # Generate JSON report
         report = generate_analysis_json(
             apk_path=apk_path,
@@ -258,6 +304,8 @@ def analyze_cmd(
     top_k: int = typer.Option(100, "--top-k", help="Number of top classes to include"),
     heatmap: bool = typer.Option(False, "--heatmap", help="Save heatmap PNG"),
     json: bool = typer.Option(True, "--json/--no-json", help="Save JSON report"),
+    emit_smali: bool = typer.Option(False, "--emit-smali", help="Decompile top classes to Smali (requires --baksmali)"),
+    baksmali: Optional[Path] = typer.Option(None, "--baksmali", help="Path to baksmali.jar (required for --emit-smali)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")
 ):
     """Analyze a single APK file."""
@@ -277,6 +325,15 @@ def analyze_cmd(
         if not last_conv_layer:
             console.log("No convolutional layer found. XAI methods may not work.", style="warning")
     
+    # Validate baksmali options
+    if emit_smali and not baksmali:
+        console.log("--emit-smali requires --baksmali. Please provide path to baksmali.jar.", style="error")
+        raise typer.Exit(1)
+    
+    if emit_smali and baksmali and not baksmali.exists():
+        console.log(f"Baksmali jar not found: {baksmali}", style="error")
+        raise typer.Exit(1)
+    
     # Create output directory
     ensure_dir(str(output))
     
@@ -292,7 +349,9 @@ def analyze_cmd(
         top_k=top_k,
         output_dir=str(output),
         save_heatmap=heatmap,
-        save_per_method=False
+        save_per_method=False,
+        emit_smali=emit_smali,
+        baksmali_jar=str(baksmali) if baksmali else None
     )
     
     if result:
@@ -317,6 +376,8 @@ def adb_scan_cmd(
     threshold: float = typer.Option(0.5, "--threshold", help="Malware threshold"),
     top_k: int = typer.Option(100, "--top-k", help="Number of top classes"),
     heatmap: bool = typer.Option(False, "--heatmap", help="Save heatmaps"),
+    emit_smali: bool = typer.Option(False, "--emit-smali", help="Decompile top classes to Smali (requires --baksmali)"),
+    baksmali: Optional[Path] = typer.Option(None, "--baksmali", help="Path to baksmali.jar (required for --emit-smali)"),
     workers: int = typer.Option(1, "--workers", help="Number of parallel workers"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")
 ):
@@ -379,6 +440,11 @@ def adb_scan_cmd(
                 progress.update(task, advance=1)
                 continue
             
+            # Validate baksmali options
+            if emit_smali and not baksmali:
+                console.log("--emit-smali requires --baksmali. Skipping smali decompilation.", style="warning")
+                emit_smali = False
+            
             # Analyze
             result = analyze_apk(
                 apk_path=apk_path,
@@ -391,7 +457,9 @@ def adb_scan_cmd(
                 top_k=top_k,
                 output_dir=str(output),
                 save_heatmap=heatmap,
-                save_per_method=False
+                save_per_method=False,
+                emit_smali=emit_smali,
+                baksmali_jar=str(baksmali) if baksmali and baksmali.exists() else None
             )
             
             if result:

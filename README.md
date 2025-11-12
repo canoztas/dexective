@@ -4,7 +4,7 @@
 
 **Watch the demo video: [https://youtu.be/13ysN18IwLA](https://youtu.be/13ysN18IwLA)**
 
-**dexective** is a command-line tool that **classifies Android APKs as benign or malicious**, and **if malicious, localizes the exact classes responsible** using Explainable AI (XAI) techniques.
+**dexective** is a command-line tool for analyzing Android applications (`.apk` files). It transforms DEX files into grayscale images, classifies them with a CNN, and—if malicious—applies multiple Explainable AI (XAI) techniques to pinpoint the exact classes responsible.
 
 ![Dexective Demo](images/dexective.gif)
 

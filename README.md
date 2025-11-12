@@ -6,20 +6,22 @@
 
 **dexective** is a command-line tool for analyzing Android applications (`.apk` files). It transforms DEX files into grayscale images, classifies them with a CNN, and—if malicious—applies multiple Explainable AI (XAI) techniques to pinpoint the exact classes responsible.
 
+![Dexective](images/dexective.png)
+
 ![Dexective Demo](images/dexective.gif)
 
 ![Heatmap](images/heatmap.png)
 
 ---
 
-## 🎯 Core Functionality
+## Core Functionality
 
 1. **Malware Classification**: Transforms DEX files into grayscale images and uses a CNN to classify as **Benign** or **Malicious**
 2. **Class Localization**: If malicious, applies multiple XAI methods to generate heatmaps and maps them back to specific Java/Kotlin classes
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
@@ -57,7 +59,7 @@ dexective analyze --apk malware.apk \
 
 ---
 
-## 📋 Prerequisites
+## Prerequisites
 
 - **Python 3.10+**
 - **Java + baksmali.jar** (recommended for class mapping)
@@ -68,7 +70,7 @@ dexective analyze --apk malware.apk \
 
 ---
 
-## 💻 Usage Examples
+## Usage Examples
 
 ### Analyze Single APK
 
@@ -113,7 +115,7 @@ dexective adb-scan \
 
 ---
 
-## 🗺️ How It Works: Mapping AI Results to Code
+## How It Works: Mapping AI Results to Code
 
 Dexective maps XAI heatmaps back to actual classes through this pipeline:
 
@@ -145,7 +147,7 @@ Heatmap pixel (100, 200) with value 0.95
 
 ---
 
-## 📂 Output
+## Output
 
 ```
 out/
@@ -163,7 +165,7 @@ The JSON report includes:
 
 ---
 
-## 🔧 XAI Methods
+## XAI Methods
 
 - **Grad-CAM++**: Gradient-weighted Class Activation Mapping
 - **Score-CAM**: Score-weighted Class Activation Mapping
@@ -175,6 +177,6 @@ All methods are combined using ensemble (max or mean) for robust localization.
 
 ---
 
-## 📖 License
+## License
 
 MIT

@@ -140,6 +140,41 @@ def decompile_top_classes(
     return class_to_smali
 
 
+def decompile_dex_for_mapping(dex_path: str, output_dir: str, baksmali_jar: str) -> Optional[str]:
+    """
+    Decompile entire DEX to smali for class mapping purposes.
+    
+    Args:
+        dex_path: Path to DEX file
+        output_dir: Output directory for smali files
+        baksmali_jar: Path to baksmali.jar
+        
+    Returns:
+        Path to smali directory, or None on failure
+    """
+    smali_dir = os.path.join(output_dir, "smali")
+    try:
+        os.makedirs(smali_dir, exist_ok=True)
+        
+        command = ['java', '-jar', baksmali_jar, 'disassemble', dex_path, '-o', smali_dir]
+        subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=600
+        )
+        
+        return smali_dir if os.path.exists(smali_dir) else None
+        
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Baksmali decompilation failed for mapping: {e.stderr if e.stderr else str(e)}")
+        return None
+    except Exception as e:
+        logging.error(f"Error during baksmali decompilation for mapping: {e}")
+        return None
+
+
 def check_baksmali_available(baksmali_jar: str) -> bool:
     """
     Check if baksmali is available and working.

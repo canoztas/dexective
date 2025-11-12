@@ -1,8 +1,31 @@
 """APK reading and DEX extraction utilities."""
 import zipfile
 import os
+import logging
+import sys
+import contextlib
 from typing import List, Tuple, Optional
 from pathlib import Path
+
+# Suppress androguard logs
+logging.getLogger('androguard').setLevel(logging.ERROR)
+logging.getLogger('androguard.core').setLevel(logging.ERROR)
+logging.getLogger('androguard.core.axml').setLevel(logging.ERROR)
+logging.getLogger('androguard.core.apk').setLevel(logging.ERROR)
+logging.getLogger('androguard.core.bytecodes').setLevel(logging.ERROR)
+logging.getLogger('androguard.core.api_specific_resources').setLevel(logging.ERROR)
+
+
+@contextlib.contextmanager
+def suppress_stderr():
+    """Context manager to suppress stderr output."""
+    with open(os.devnull, 'w') as devnull:
+        old_stderr = sys.stderr
+        sys.stderr = devnull
+        try:
+            yield
+        finally:
+            sys.stderr = old_stderr
 
 
 def extract_dex_files(apk_path: str, output_dir: str) -> List[Tuple[str, str]]:
@@ -50,9 +73,29 @@ def get_apk_package_name(apk_path: str) -> Optional[str]:
         Package name or None if extraction fails
     """
     try:
-        from androguard.core.apk import APK
-        apk = APK(apk_path)
-        return apk.get_package()
+        # Aggressively suppress all androguard logging and output
+        import logging
+        
+        # Set all androguard loggers to CRITICAL before importing
+        androguard_loggers = [
+            'androguard', 'androguard.core', 'androguard.core.axml',
+            'androguard.core.apk', 'androguard.core.bytecodes',
+            'androguard.core.api_specific_resources'
+        ]
+        for logger_name in androguard_loggers:
+            logger = logging.getLogger(logger_name)
+            logger.setLevel(logging.CRITICAL)
+            # Disable all handlers for these loggers
+            logger.handlers = []
+            logger.propagate = False
+        
+        # Suppress stderr during APK parsing (androguard uses loguru which writes to stderr)
+        with suppress_stderr():
+            from androguard.core.apk import APK
+            apk = APK(apk_path)
+            result = apk.get_package()
+        
+        return result
     except Exception:
         return None
 

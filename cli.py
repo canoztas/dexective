@@ -9,9 +9,11 @@ import cv2
 from collections import defaultdict
 
 import typer
+import logging
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
 from rich.panel import Panel
+from rich.table import Table
 from rich.theme import Theme
 from pyfiglet import Figlet
 
@@ -23,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from models.loader import load_keras_model, find_last_conv_layer, get_model_input_shape
 from dex.apk_reader import extract_dex_files, get_apk_package_name
 from dex.mapping import PixelMap, ClassMapper, compute_class_scores
-from dex.baksmali import decompile_top_classes, check_baksmali_available
+from dex.baksmali import decompile_top_classes, decompile_dex_for_mapping, check_baksmali_available
 from utils.images import bytes_to_image, prepare_model_input
 from utils.hashing import sha256_file, sha256_bytes
 from utils.io import ensure_dir, get_temp_dir, cleanup_temp_dir, safe_filename
@@ -38,6 +40,20 @@ from adb.device import check_adb_available, check_device_connected, list_package
 from adb.pull import pull_apk
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
+# Configure logging - INFO level for our modules, WARNING for others
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(levelname)s - %(name)s - %(message)s'
+)
+# Suppress noisy loggers - set to ERROR to hide all androguard debug/info/warning messages
+logging.getLogger('androguard').setLevel(logging.ERROR)
+logging.getLogger('androguard.core').setLevel(logging.ERROR)
+logging.getLogger('androguard.core.axml').setLevel(logging.ERROR)
+logging.getLogger('androguard.core.bytecodes').setLevel(logging.ERROR)
+logging.getLogger('androguard.core.api_specific_resources').setLevel(logging.ERROR)
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
+logging.getLogger('keras').setLevel(logging.ERROR)
 
 # Setup Rich console
 custom_theme = Theme({
@@ -55,6 +71,14 @@ app = typer.Typer(
     rich_markup_mode="markdown",
     no_args_is_help=True
 )
+
+# Blacklist for filtering out system classes
+BLACKLIST = [
+    'android\\support', 'com\\google\\android', 'com/google/android', 'android/support',
+    'com\\android\\', 'com/android/', 'com\\google\\', 'com/google/', 'android\\annotation',
+    'android/annotation', 'android\\net\\http\\', 'android/net/http/', 'org\\apache\\',
+    'org/apache/', 'Xbox\\', 'Xbox/', 'android\\malware', 'android/malware'
+]
 
 
 def analyze_apk(
@@ -114,6 +138,18 @@ def analyze_apk(
         
         # Second pass: generate XAI heatmaps for all DEX files if malicious
         if is_malicious and last_conv_layer:
+            # Decompile DEX files to smali for class mapping (if baksmali is available)
+            dex_to_smali_dir = {}
+            if baksmali_jar and check_baksmali_available(baksmali_jar):
+                console.log("Decompiling DEX files to Smali for class mapping...")
+                for dex_filename, dex_path in dex_files:
+                    smali_mapping_dir = os.path.join(temp_dir, f"smali_mapping_{dex_filename}")
+                    ensure_dir(smali_mapping_dir)
+                    smali_dir = decompile_dex_for_mapping(dex_path, smali_mapping_dir, baksmali_jar)
+                    if smali_dir:
+                        dex_to_smali_dir[dex_filename] = smali_dir
+                        logging.info(f"Decompiled {dex_filename} to {smali_dir} for mapping")
+            
             for dex_filename, dex_path in dex_files:
                 # Read DEX bytes
                 with open(dex_path, 'rb') as f:
@@ -128,7 +164,9 @@ def analyze_apk(
                 model_input = prepare_model_input(dex_image, model.input_shape)
                 
                 pixel_map = PixelMap(dex_bytes, dex_filename)
-                class_mapper = ClassMapper(dex_path, dex_bytes, dex_filename)
+                # Use smali directory for mapping if available
+                smali_dir = dex_to_smali_dir.get(dex_filename)
+                class_mapper = ClassMapper(dex_path, dex_bytes, dex_filename, smali_dir=smali_dir, blacklist=BLACKLIST)
                 
                 dex_method_heatmaps = {}
                 
@@ -201,11 +239,39 @@ def analyze_apk(
         class_score_list.sort(key=lambda x: x["score"], reverse=True)
         class_score_list = class_score_list[:top_k]
         
+        # Display top classes to console
+        if class_score_list:
+            console.rule(f"[bold green]Top {len(class_score_list)} Suspicious Classes[/bold green]")
+            table = Table(title=f"Top {min(len(class_score_list), top_k)} Classes by Heatmap Score")
+            table.add_column("Rank", style="cyan", justify="right")
+            table.add_column("Class Name", style="magenta")
+            table.add_column("Score", style="yellow", justify="right")
+            table.add_column("DEX", style="dim")
+            
+            for idx, cls_info in enumerate(class_score_list, 1):
+                table.add_row(
+                    str(idx),
+                    cls_info["class"],
+                    f"{cls_info['score']:.6f}",
+                    cls_info.get("dex", "N/A")
+                )
+            console.print(table)
+        else:
+            console.log("[warning]No classes found in heatmap analysis.[/warning]")
+        
         # Decompile top classes with baksmali if requested
         class_to_smali = {}
         if emit_smali and baksmali_jar:
             if not check_baksmali_available(baksmali_jar):
                 console.log("Baksmali is not available. Please ensure Java is installed and baksmali.jar exists.", style="error")
+            elif not class_score_list:
+                # No classes to decompile - explain why
+                if not is_malicious:
+                    console.log(f"No classes to decompile: APK is classified as [success]benign[/success] (score: {prediction:.4f} < {threshold}). XAI localization only runs for malicious APKs.", style="warning")
+                elif not last_conv_layer:
+                    console.log("No classes to decompile: No convolutional layer found in model. XAI methods cannot run.", style="warning")
+                else:
+                    console.log("No classes to decompile: No classes were found in the heatmap analysis. This may indicate an issue with class mapping (check if Androguard is installed).", style="warning")
             else:
                 console.log(f"Decompiling top {len(class_score_list)} classes with baksmali...")
                 smali_output_dir = os.path.join(output_dir, apk_sha256, "smali")
@@ -309,6 +375,14 @@ def analyze_cmd(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")
 ):
     """Analyze a single APK file."""
+    # Set logging level based on verbose flag
+    if verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger('dex.mapping').setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(logging.INFO)
+        logging.getLogger('dex.mapping').setLevel(logging.INFO)
+    
     # Parse XAI methods
     xai_methods = [m.strip().lower() for m in xai.split(",") if m.strip()]
     

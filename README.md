@@ -62,11 +62,11 @@ dexective analyze --apk malware.apk \
 ## Prerequisites
 
 - **Python 3.10+**
-- **Java + baksmali.jar** (recommended for class mapping)
+- **Java + baksmali.jar** (placed under /tools)
 - **Keras `.h5` model** (download from [Releases](https://github.com/canoztas/dexective/releases))
 - **ADB** (optional, for `adb-scan` command)
 
-**Note**: Baksmali is **recommended** for accurate class mapping. Androguard is used as a fallback if baksmali is unavailable.
+**Note**: Baksmali is **recommended** for accurate class mapping. Androguard is used as a fallback if baksmali is unavailable (it may not work all the time).
 
 ---
 

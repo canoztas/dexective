@@ -179,4 +179,7 @@ All methods are combined using ensemble (max or mean) for robust localization.
 
 ## License
 
-MIT
+The source code for **dexective** is licensed under the [MIT License](LICENSE).
+
+**Availability Note:**
+* ✅ **Pre-trained Model:** The `localize-hot-pixels.h5` model is publicly available and can be downloaded from the [Releases](https://github.com/canoztas/dexective/releases) page.
